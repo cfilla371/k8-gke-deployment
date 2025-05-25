@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: ppfbll/k8:bb-bed-latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_HOST
+          value: 127.0.0.1 
+        - name: DB_PORT
+          value: "3306" 
+        - name: DB_NAME
+          value: bingebuddy
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-credentials
+              key: password
+        - name: OMDB_API_URL
+          value: https://www.omdbapi.com/
+        - name: OMDB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: omdb-api-secret
+              key: api_key
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 5
+      - name: cloudsql-proxy
+        image: gcr.io/cloudsql-docker/google-cloud-sqlproxy:latest
+        command:
+          - "/cloud_sql_proxy"
+          - "-instances=bbk8-460817:us-central1:my-sql-instance=tcp:0.0.0.0:3306"
+      
