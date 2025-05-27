@@ -2,10 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
+  namespace: default
   labels:
     app: backend
 spec:
-  replicas: 3
+  replicas: 1 
   selector:
     matchLabels:
       app: backend
@@ -16,48 +17,77 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ppfbll/k8:bb-bed-latest
+        image: gcr.io/bbk8-460817/bingebuddy-backend:1.2.2
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
+          protocol: TCP
         env:
-        - name: DB_HOST
-          value: 127.0.0.1 
-        - name: DB_PORT
-          value: "3306" 
-        - name: DB_NAME
-          value: bingebuddy
-        - name: DB_USER
+        - name: SPRING_DATASOURCE_URL
+          value: jdbc:mysql://127.0.0.1:3306/bingebuddy?useSSL=false&allowPublicKeyRetrieval=true
+        - name: SPRING_DATASOURCE_USERNAME
           valueFrom:
             secretKeyRef:
-              name: mysql-credentials
               key: username
-        - name: DB_PASSWORD
+              name: mysql-credentials
+        - name: SPRING_DATASOURCE_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: mysql-credentials
               key: password
+              name: mysql-credentials
+        - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+          value: com.mysql.cj.jdbc.Driver
+        - name: SPRING_JPA_DATABASE_PLATFORM
+          value: org.hibernate.dialect.MySQL8Dialect
         - name: OMDB_API_URL
           value: https://www.omdbapi.com/
         - name: OMDB_API_KEY
           valueFrom:
             secretKeyRef:
-              name: omdb-api-secret
               key: api_key
+              name: omdb-api-secret
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: jwt-secret
+              key: jwt-signing-key
         livenessProbe:
           httpGet:
             path: /actuator/health
             port: 8080
-          initialDelaySeconds: 30
+            scheme: HTTP
+          initialDelaySeconds: 120
           periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /actuator/health
             port: 8080
-          initialDelaySeconds: 20
+            scheme: HTTP
+          initialDelaySeconds: 100
           periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 50m
+            memory: 512Mi
       - name: cloudsql-proxy
-        image: gcr.io/cloudsql-docker/google-cloud-sqlproxy:latest
-        command:
-          - "/cloud_sql_proxy"
-          - "-instances=bbk8-460817:us-central1:my-sql-instance=tcp:0.0.0.0:3306"
-      
+        image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.1.0
+        imagePullPolicy: IfNotPresent
+        args:
+          - bbk8-460817:us-central1:my-sql-instance 
+          - --port=3306
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
